@@ -106,30 +106,30 @@ async function run() {
     // });
 
     // === 5. UPDATE court by ID ===
-    // app.put("/courts/:id", async (req, res) => {
-    //   try {
-    //     const id = req.params.id;
-    //     const updatedData = req.body;
+    app.put("/courts/:id", async (req, res) => {
+      try {
+        const id = req.params.id;
+        const updatedData = req.body;
 
-    //     const updateDoc = {
-    //       $set: updatedData,
-    //     };
+        const updateDoc = {
+          $set: updatedData,
+        };
 
-    //     const result = await courtsCollection.updateOne(
-    //       { _id: new ObjectId(id) },
-    //       updateDoc
-    //     );
+        const result = await courtsCollection.updateOne(
+          { _id: new ObjectId(id) },
+          updateDoc
+        );
 
-    //     if (result.matchedCount === 0) {
-    //       return res.status(404).send({ message: "Court not found to update" });
-    //     }
+        if (result.matchedCount === 0) {
+          return res.status(404).send({ message: "Court not found to update" });
+        }
 
-    //     res.send({ message: "Court updated successfully" });
-    //   } catch (error) {
-    //     console.error("Update court error:", error);
-    //     res.status(500).send({ message: "Internal server error", error });
-    //   }
-    // });
+        res.send(result);
+      } catch (error) {
+        console.error("Update court error:", error);
+        res.status(500).send({ message: "Internal server error", error });
+      }
+    });
 
     //users
     // app.post("/users", async (req, res) => {
