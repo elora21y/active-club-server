@@ -87,23 +87,23 @@ async function run() {
     });
 
     // === 4. DELETE court by ID ===
-    // app.delete("/courts/:id", async (req, res) => {
-    //   try {
-    //     const id = req.params.id;
-    //     const result = await courtsCollection.deleteOne({
-    //       _id: new ObjectId(id),
-    //     });
+    app.delete("/courts/:id", async (req, res) => {
+      try {
+        const id = req.params.id;
+        const result = await courtsCollection.deleteOne({
+          _id: new ObjectId(id),
+        });
 
-    //     if (result.deletedCount === 0) {
-    //       return res.status(404).send({ message: "Court not found to delete" });
-    //     }
+        if (result.deletedCount === 0) {
+          return res.status(404).send({ message: "Court not found to delete" });
+        }
 
-    //     res.send({ message: "Court deleted successfully" });
-    //   } catch (error) {
-    //     console.error("Delete court error:", error);
-    //     res.status(500).send({ message: "Internal server error", error });
-    //   }
-    // });
+        res.send(result);
+      } catch (error) {
+        console.error("Delete court error:", error);
+        res.status(500).send({ message: "Internal server error", error });
+      }
+    });
 
     // === 5. UPDATE court by ID ===
     app.put("/courts/:id", async (req, res) => {
