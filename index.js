@@ -1,11 +1,10 @@
 const express = require("express");
 const cors = require("cors");
-const dotenv = require("dotenv");
-dotenv.config();
+require("dotenv").config();
 const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 
 const app = express();
-const port = process.env.PORT || 2100;
+const port = process.env.PORT || 2200;
 // middleware
 app.use(cors());
 app.use(express.json());
@@ -35,6 +34,7 @@ async function run() {
     const courtsCollection = db.collection("courts");
     const usersCollection = db.collection("users");
     const paymentsCollection = db.collection("payments");
+    const bookingsCollection = db.collection("bookings");
 
 
     // === 1. GET all courts (sorted by createdAt descending) ===
@@ -152,6 +152,64 @@ async function run() {
     //     res.status(500).send({ message: "Internal server error", error });
     //   }
     // });
+
+      // === GET bookings (filtered by email + pending) ===
+  app.get('/bookings', async (req, res) => {
+    try {
+      const email = req.query.email;
+      let query = {};
+
+      if (email) {
+        query = { email, status: 'pending' };
+      }
+
+      const bookings = await bookingsCollection.find(query).toArray();
+      res.send(bookings);
+    } catch (error) {
+      console.error('Booking fetch error:', error);
+      res.status(500).send({ message: 'Internal server error', error });
+    }
+  });
+    //bookings
+    app.post('/bookings', async (req, res) => {
+  try {
+    const bookingData = req.body;
+
+    const result = await bookingsCollection.insertOne(bookingData);
+    res.send(result);
+  } catch (error) {
+    res.status(500).send({ success: false, message: 'Booking failed', error });
+  }
+});
+
+// === DELETE /bookings/:id ===
+app.delete('/bookings/:id', async (req, res) => {
+  try {
+    const id = req.params.id;
+    //find the booking data
+    const booking = await bookingsCollection.findOne({ _id: new ObjectId(id) });
+
+    if (!booking) {
+      return res.status(404).send({ message: 'Booking not found' });
+    }
+//delete booking data from bookings api
+    const bookingDeleteResult = await bookingsCollection.deleteOne({ _id: new ObjectId(id) });
+
+    //find the court id 
+    // const courtId = booking.courtId;
+    // let courtDeleteResult = null;
+    // if (courtId) {
+    //   courtDeleteResult = await courtsCollection.deleteOne({ _id: new ObjectId(courtId) });
+    // }
+    res.send(bookingDeleteResult);
+  } catch (error) {
+    console.error('Delete booking and court error:', error);
+    res.status(500).send({ message: 'Internal server error', error });
+  }
+});
+
+
+
   } finally {
     // Ensures that the client will close when you finish/error
     // await client.close();
