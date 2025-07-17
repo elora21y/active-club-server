@@ -36,6 +36,7 @@ async function run() {
     const usersCollection = db.collection("users");
     const paymentsCollection = db.collection("payments");
     const bookingsCollection = db.collection("bookings");
+    const couponsCollection = db.collection("coupons");
 
     // === 1. GET all courts (sorted by createdAt descending) ===
     app.get("/courts", async (req, res) => {
@@ -132,7 +133,7 @@ async function run() {
     });
 
     //users
-     app.get("/users", async (req, res) => {
+    app.get("/users", async (req, res) => {
       try {
         const result = await usersCollection.find().toArray();
         res.send(result);
@@ -142,17 +143,16 @@ async function run() {
       }
     });
     // GET /users/members?name=elora
-app.get("/users/members", async (req, res) => {
-  try {
-    let query = { role: "member" };
-    const members = await usersCollection.find(query).toArray();
-    res.send(members);
-  } catch (error) {
-    console.error("Error fetching members:", error);
-    res.status(500).send({ message: "Internal server error", error });
-  }
-});
-
+    app.get("/users/members", async (req, res) => {
+      try {
+        let query = { role: "member" };
+        const members = await usersCollection.find(query).toArray();
+        res.send(members);
+      } catch (error) {
+        console.error("Error fetching members:", error);
+        res.status(500).send({ message: "Internal server error", error });
+      }
+    });
 
     app.post("/users", async (req, res) => {
       try {
@@ -176,18 +176,19 @@ app.get("/users/members", async (req, res) => {
     });
 
     // DELETE /users/:id
-app.delete("/users/:id", async (req, res) => {
-  try {
-    const id = req.params.id;
-    const result = await usersCollection.deleteOne({ _id: new ObjectId(id) });
+    app.delete("/users/:id", async (req, res) => {
+      try {
+        const id = req.params.id;
+        const result = await usersCollection.deleteOne({
+          _id: new ObjectId(id),
+        });
 
-    res.send(result)
-  } catch (error) {
-    console.error("Delete user error:", error);
-    res.status(500).send({ message: "Internal server error", error });
-  }
-});
-
+        res.send(result);
+      } catch (error) {
+        console.error("Delete user error:", error);
+        res.status(500).send({ message: "Internal server error", error });
+      }
+    });
 
     // === GET bookings (filtered by email + pending) ===
     app.get("/bookings", async (req, res) => {
@@ -318,22 +319,22 @@ app.delete("/users/:id", async (req, res) => {
     });
 
     // get for payments
-app.get("/payments", async (req, res) => {
-  try {
-    const email = req.query.email;
+    app.get("/payments", async (req, res) => {
+      try {
+        const email = req.query.email;
 
-    let query = {}
-    if(email){
-      query = {email}
-    }
+        let query = {};
+        if (email) {
+          query = { email };
+        }
 
-    const payments = await paymentsCollection.find(query).toArray();
-    res.send(payments);
-  } catch (error) {
-    console.error("Payments fetch error:", error);
-    res.status(500).send({ message: "Internal server error", error });
-  }
-});
+        const payments = await paymentsCollection.find(query).toArray();
+        res.send(payments);
+      } catch (error) {
+        console.error("Payments fetch error:", error);
+        res.status(500).send({ message: "Internal server error", error });
+      }
+    });
 
     //payment
     app.post("/payments", async (req, res) => {
@@ -375,6 +376,86 @@ app.get("/payments", async (req, res) => {
         res.status(500).send({ error: error.message });
       }
     });
+app.get("/coupons", async (req, res) => {
+  try {
+    const coupons = await couponsCollection.find().toArray();
+    res.send(coupons);
+  } catch (error) {
+    console.error("Get coupons error:", error);
+    res.status(500).send({ message: "Internal server error" });
+  }
+});
+
+
+    app.post("/coupons", async (req, res) => {
+  try {
+    const { code, discount } = req.body;
+
+    if (!code || !discount) {
+      return res.status(400).json({ message: "Code and discount are required." });
+    }
+
+    const newCoupon = {
+      code,
+      discount: parseFloat(discount),
+      createdAt: new Date().toISOString(),
+    };
+
+    const result = await couponsCollection.insertOne(newCoupon);
+    res.send(result);
+  } catch (error) {
+    console.error("Add coupon error:", error);
+    res.status(500).send({ message: "Internal server error" });
+  }
+});
+
+app.patch("/coupons/:id", async (req, res) => {
+  try {
+    const id = req.params.id;
+    const { code, discount } = req.body;
+
+    const updateDoc = {
+      $set: {
+        code,
+        discount: parseFloat(discount),
+        updatedAt: new Date().toISOString(),
+      },
+    };
+
+    const result = await couponsCollection.updateOne(
+      { _id: new ObjectId(id) },
+      updateDoc
+    );
+
+    if (result.matchedCount === 0) {
+      return res.status(404).send({ message: "Coupon not found" });
+    }
+
+    res.send({ message: "Coupon updated successfully", result });
+  } catch (error) {
+    console.error("Update coupon error:", error);
+    res.status(500).send({ message: "Internal server error" });
+  }
+});
+
+
+app.delete("/coupons/:id", async (req, res) => {
+  try {
+    const id = req.params.id;
+    const result = await couponsCollection.deleteOne({ _id: new ObjectId(id) });
+
+    if (result.deletedCount === 0) {
+      return res.status(404).send({ message: "Coupon not found" });
+    }
+
+    res.send({ message: "Coupon deleted successfully", result });
+  } catch (error) {
+    console.error("Delete coupon error:", error);
+    res.status(500).send({ message: "Internal server error" });
+  }
+});
+
+    
   } finally {
     // Ensures that the client will close when you finish/error
     // await client.close();
