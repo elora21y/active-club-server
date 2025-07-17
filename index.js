@@ -189,20 +189,20 @@ async function run() {
     });
 
     //get confirm bookings
-    // app.get("/bookings/approved", async (req, res) => {
-    //   try {
-    //     const email = req.query.email;
-    //     const query = email
-    //       ? { email, status: "confirm" }
-    //       : { status: "confirm" };
+    app.get("/bookings/confirm", async (req, res) => {
+      try {
+        const email = req.query.email;
+        const query = email
+          ? { email, status: "confirm" }
+          : { status: "confirm" };
 
-    //     const bookings = await bookingsCollection.find(query).toArray();
-    //     res.send(bookings);
-    //   } catch (error) {
-    //     console.error("Approved bookings fetch error:", error);
-    //     res.status(500).send({ message: "Internal server error", error });
-    //   }
-    // });
+        const bookings = await bookingsCollection.find(query).toArray();
+        res.send(bookings);
+      } catch (error) {
+        console.error("Approved bookings fetch error:", error);
+        res.status(500).send({ message: "Internal server error", error });
+      }
+    });
 
     //get all bookings with id
     app.get("/bookings/:id", async (req, res) => {
