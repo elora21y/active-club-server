@@ -132,6 +132,16 @@ async function run() {
     });
 
     //users
+     app.get("/users", async (req, res) => {
+      try {
+        const result = await usersCollection.find().toArray();
+        res.send(result);
+      } catch (error) {
+        console.error("Booking fetch error:", error);
+        res.status(500).send({ message: "Internal server error", error });
+      }
+    });
+
     app.post("/users", async (req, res) => {
       try {
         const userInfo = req.body;
@@ -280,6 +290,24 @@ async function run() {
         res.status(500).send({ message: "Internal server error", error });
       }
     });
+
+    // get for payments
+app.get("/payments", async (req, res) => {
+  try {
+    const email = req.query.email;
+
+    let query = {}
+    if(email){
+      query = {email}
+    }
+
+    const payments = await paymentsCollection.find(query).toArray();
+    res.send(payments);
+  } catch (error) {
+    console.error("Payments fetch error:", error);
+    res.status(500).send({ message: "Internal server error", error });
+  }
+});
 
     //payment
     app.post("/payments", async (req, res) => {
