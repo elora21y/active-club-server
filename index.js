@@ -132,26 +132,27 @@ async function run() {
     });
 
     //users
-    // app.post("/users", async (req, res) => {
-    //   try {
-    //     const userInfo = req.body;
+    app.post("/users", async (req, res) => {
+      try {
+        const userInfo = req.body;
 
-    //     const exitUser = await usersCollection.findOne({
-    //       email: userInfo.email,
-    //     });
-    //     if (exitUser) {
-    //       return res
-    //         .status(400)
-    //         .send({ message: "This Email is already Register" });
-    //     }
+        const exitUser = await usersCollection.findOne({
+          email: userInfo.email,
+        });
+        if (exitUser) {
+          return res
+            .status(400)
+            .send({ message: "This Email is already Register" });
+        }
 
-    //     const result = await usersCollection.insertOne(userInfo);
-    //     res.status(201).send(result);
-    //   } catch (error) {
-    //     console.error("User creation error:", error);
-    //     res.status(500).send({ message: "Internal server error", error });
-    //   }
-    // });
+        const result = await usersCollection.insertOne(userInfo);
+        res.status(201).send(result);
+      } catch (error) {
+        console.error("User creation error:", error);
+        res.status(500).send({ message: "Internal server error", error });
+      }
+    });
+
 
       // === GET bookings (filtered by email + pending) ===
   app.get('/bookings', async (req, res) => {
@@ -161,6 +162,9 @@ async function run() {
 
       if (email) {
         query = { email, status: 'pending' };
+      }
+      else{
+        query= {status : 'pending'}
       }
 
       const bookings = await bookingsCollection.find(query).toArray();
@@ -181,6 +185,18 @@ async function run() {
     res.status(500).send({ success: false, message: 'Booking failed', error });
   }
 });
+// === PUT /bookings/:id (update status) ===
+app.put('/bookings/:id', async (req, res) => {
+  const id = req.params.id;
+  const { status } = req.body;
+
+  const filter = { _id: new ObjectId(id) };
+  const updateDoc = { $set: { status } };
+
+  const result = await bookingsCollection.updateOne(filter, updateDoc);
+  res.send(result);
+});
+
 
 // === DELETE /bookings/:id ===
 app.delete('/bookings/:id', async (req, res) => {
