@@ -2,6 +2,7 @@ const express = require("express");
 const cors = require("cors");
 require("dotenv").config();
 const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
+const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
 
 const app = express();
 const port = process.env.PORT || 2200;
@@ -36,7 +37,6 @@ async function run() {
     const paymentsCollection = db.collection("payments");
     const bookingsCollection = db.collection("bookings");
 
-
     // === 1. GET all courts (sorted by createdAt descending) ===
     app.get("/courts", async (req, res) => {
       try {
@@ -68,7 +68,7 @@ async function run() {
     //     res.status(500).send({ message: "Internal server error", error });
     //   }
     // });
-    
+
     // ===3. COURT POST API ===
     app.post("/courts", async (req, res) => {
       try {
@@ -153,79 +153,174 @@ async function run() {
       }
     });
 
+    // === GET bookings (filtered by email + pending) ===
+    app.get("/bookings", async (req, res) => {
+      try {
+        const email = req.query.email;
+        let query = {};
 
-      // === GET bookings (filtered by email + pending) ===
-  app.get('/bookings', async (req, res) => {
-    try {
-      const email = req.query.email;
-      let query = {};
+        if (email) {
+          query = { email, status: "pending" };
+        } else {
+          query = { status: "pending" };
+        }
 
-      if (email) {
-        query = { email, status: 'pending' };
+        const bookings = await bookingsCollection.find(query).toArray();
+        res.send(bookings);
+      } catch (error) {
+        console.error("Booking fetch error:", error);
+        res.status(500).send({ message: "Internal server error", error });
       }
-      else{
-        query= {status : 'pending'}
+    });
+    // === GET /bookings/approved?email=someone@example.com ===
+    app.get("/bookings/approved", async (req, res) => {
+      try {
+        const email = req.query.email;
+        const query = email
+          ? { email, status: "approved" }
+          : { status: "approved" };
+
+        const bookings = await bookingsCollection.find(query).toArray();
+        res.send(bookings);
+      } catch (error) {
+        console.error("Approved bookings fetch error:", error);
+        res.status(500).send({ message: "Internal server error", error });
+      }
+    });
+
+    //get confirm bookings
+    // app.get("/bookings/approved", async (req, res) => {
+    //   try {
+    //     const email = req.query.email;
+    //     const query = email
+    //       ? { email, status: "confirm" }
+    //       : { status: "confirm" };
+
+    //     const bookings = await bookingsCollection.find(query).toArray();
+    //     res.send(bookings);
+    //   } catch (error) {
+    //     console.error("Approved bookings fetch error:", error);
+    //     res.status(500).send({ message: "Internal server error", error });
+    //   }
+    // });
+
+    //get all bookings with id
+    app.get("/bookings/:id", async (req, res) => {
+      const id = req.params.id;
+      const bookings = await bookingsCollection.findOne({
+        _id: new ObjectId(id),
+      });
+
+      if (!bookings) {
+        return res.status(404).send({ message: "Court not found" });
       }
 
-      const bookings = await bookingsCollection.find(query).toArray();
       res.send(bookings);
-    } catch (error) {
-      console.error('Booking fetch error:', error);
-      res.status(500).send({ message: 'Internal server error', error });
-    }
-  });
+    });
+
     //bookings
-    app.post('/bookings', async (req, res) => {
-  try {
-    const bookingData = req.body;
+    app.post("/bookings", async (req, res) => {
+      try {
+        const bookingData = req.body;
 
-    const result = await bookingsCollection.insertOne(bookingData);
-    res.send(result);
-  } catch (error) {
-    res.status(500).send({ success: false, message: 'Booking failed', error });
-  }
-});
-// === PUT /bookings/:id (update status) ===
-app.put('/bookings/:id', async (req, res) => {
-  const id = req.params.id;
-  const { status } = req.body;
+        const result = await bookingsCollection.insertOne(bookingData);
+        res.send(result);
+      } catch (error) {
+        res
+          .status(500)
+          .send({ success: false, message: "Booking failed", error });
+      }
+    });
+    // === PUT /bookings/:id (update status) ===
+    app.put("/bookings/:id", async (req, res) => {
+      const id = req.params.id;
+      const { status, email } = req.body;
 
-  const filter = { _id: new ObjectId(id) };
-  const updateDoc = { $set: { status } };
+      const bookingFilter = { _id: new ObjectId(id) };
+      const updateBooking = { $set: { status } };
+      const result = await bookingsCollection.updateOne(
+        bookingFilter,
+        updateBooking
+      );
+      // If booking is approved, update the user's role to 'member'
+      if (status === "approved") {
+        const userFilter = { email };
+        const updateUserRole = { $set: { role: "member" } };
+        await usersCollection.updateOne(userFilter, updateUserRole);
+      }
+      res.send(result);
+    });
 
-  const result = await bookingsCollection.updateOne(filter, updateDoc);
-  res.send(result);
-});
+    // === DELETE /bookings/:id ===
+    app.delete("/bookings/:id", async (req, res) => {
+      try {
+        const id = req.params.id;
+        //find the booking data
+        const booking = await bookingsCollection.findOne({
+          _id: new ObjectId(id),
+        });
 
+        if (!booking) {
+          return res.status(404).send({ message: "Booking not found" });
+        }
+        //delete booking data from bookings api
+        const bookingDeleteResult = await bookingsCollection.deleteOne({
+          _id: new ObjectId(id),
+        });
 
-// === DELETE /bookings/:id ===
-app.delete('/bookings/:id', async (req, res) => {
-  try {
-    const id = req.params.id;
-    //find the booking data
-    const booking = await bookingsCollection.findOne({ _id: new ObjectId(id) });
+        //find the court id
+        // const courtId = booking.courtId;
+        // let courtDeleteResult = null;
+        // if (courtId) {
+        //   courtDeleteResult = await courtsCollection.deleteOne({ _id: new ObjectId(courtId) });
+        // }
+        res.send(bookingDeleteResult);
+      } catch (error) {
+        console.error("Delete booking and court error:", error);
+        res.status(500).send({ message: "Internal server error", error });
+      }
+    });
 
-    if (!booking) {
-      return res.status(404).send({ message: 'Booking not found' });
-    }
-//delete booking data from bookings api
-    const bookingDeleteResult = await bookingsCollection.deleteOne({ _id: new ObjectId(id) });
+    //payment
+    app.post("/payments", async (req, res) => {
+      const payment = req.body;
+      const { booking_id } = payment;
+      const filter = { _id: new ObjectId(booking_id) };
+      try {
+        // 1. Insert payment record
+        const insertResult = await paymentsCollection.insertOne(payment);
 
-    //find the court id 
-    // const courtId = booking.courtId;
-    // let courtDeleteResult = null;
-    // if (courtId) {
-    //   courtDeleteResult = await courtsCollection.deleteOne({ _id: new ObjectId(courtId) });
-    // }
-    res.send(bookingDeleteResult);
-  } catch (error) {
-    console.error('Delete booking and court error:', error);
-    res.status(500).send({ message: 'Internal server error', error });
-  }
-});
+        // 2. Update the booking's payment_status to "paid"
+        const updateBooking = await bookingsCollection.updateOne(filter, {
+          $set: { payments_status: "paid" },
+        });
+        const deleteApprovedStatus = await bookingsCollection.findOneAndUpdate(
+          filter,
+          { $set: { status: "confirm" } }
+        );
+        res.send(insertResult);
+      } catch (error) {
+        console.error("Error processing payment:", error);
+        res.status(500).send({ message: "Internal server error" });
+      }
+    });
 
+    // POST: /create-payment-intent
+    app.post("/create-payment-intent", async (req, res) => {
+      const { amount } = req.body;
+      try {
+        const paymentIntent = await stripe.paymentIntents.create({
+          amount: amount, // Stripe expects amount in cents
+          currency: "usd",
+          payment_method_types: ["card"],
+        });
 
-
+        res.send({ clientSecret: paymentIntent.client_secret });
+      } catch (error) {
+        console.error("Stripe Payment Error:", error);
+        res.status(500).send({ error: error.message });
+      }
+    });
   } finally {
     // Ensures that the client will close when you finish/error
     // await client.close();
