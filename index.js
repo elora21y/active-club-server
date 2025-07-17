@@ -141,6 +141,18 @@ async function run() {
         res.status(500).send({ message: "Internal server error", error });
       }
     });
+    // GET /users/members?name=elora
+app.get("/users/members", async (req, res) => {
+  try {
+    let query = { role: "member" };
+    const members = await usersCollection.find(query).toArray();
+    res.send(members);
+  } catch (error) {
+    console.error("Error fetching members:", error);
+    res.status(500).send({ message: "Internal server error", error });
+  }
+});
+
 
     app.post("/users", async (req, res) => {
       try {
@@ -162,6 +174,20 @@ async function run() {
         res.status(500).send({ message: "Internal server error", error });
       }
     });
+
+    // DELETE /users/:id
+app.delete("/users/:id", async (req, res) => {
+  try {
+    const id = req.params.id;
+    const result = await usersCollection.deleteOne({ _id: new ObjectId(id) });
+
+    res.send(result)
+  } catch (error) {
+    console.error("Delete user error:", error);
+    res.status(500).send({ message: "Internal server error", error });
+  }
+});
+
 
     // === GET bookings (filtered by email + pending) ===
     app.get("/bookings", async (req, res) => {
