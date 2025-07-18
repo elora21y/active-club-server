@@ -37,6 +37,7 @@ async function run() {
     const paymentsCollection = db.collection("payments");
     const bookingsCollection = db.collection("bookings");
     const couponsCollection = db.collection("coupons");
+    const announcementCollection = db.collection("announcements");
 
     // === 1. GET all courts (sorted by createdAt descending) ===
     app.get("/courts", async (req, res) => {
@@ -376,86 +377,137 @@ async function run() {
         res.status(500).send({ error: error.message });
       }
     });
-app.get("/coupons", async (req, res) => {
-  try {
-    const coupons = await couponsCollection.find().toArray();
-    res.send(coupons);
-  } catch (error) {
-    console.error("Get coupons error:", error);
-    res.status(500).send({ message: "Internal server error" });
-  }
-});
-
+    app.get("/coupons", async (req, res) => {
+      try {
+        const coupons = await couponsCollection.find().toArray();
+        res.send(coupons);
+      } catch (error) {
+        console.error("Get coupons error:", error);
+        res.status(500).send({ message: "Internal server error" });
+      }
+    });
 
     app.post("/coupons", async (req, res) => {
-  try {
-    const { code, discount } = req.body;
+      try {
+        const { code, discount } = req.body;
 
-    if (!code || !discount) {
-      return res.status(400).json({ message: "Code and discount are required." });
+        if (!code || !discount) {
+          return res
+            .status(400)
+            .json({ message: "Code and discount are required." });
+        }
+
+        const newCoupon = {
+          code,
+          discount: parseFloat(discount),
+          createdAt: new Date().toISOString(),
+        };
+
+        const result = await couponsCollection.insertOne(newCoupon);
+        res.send(result);
+      } catch (error) {
+        console.error("Add coupon error:", error);
+        res.status(500).send({ message: "Internal server error" });
+      }
+    });
+
+    app.patch("/coupons/:id", async (req, res) => {
+      try {
+        const id = req.params.id;
+        const { code, discount } = req.body;
+
+        const updateDoc = {
+          $set: {
+            code,
+            discount: parseFloat(discount),
+            updatedAt: new Date().toISOString(),
+          },
+        };
+
+        const result = await couponsCollection.updateOne(
+          { _id: new ObjectId(id) },
+          updateDoc
+        );
+
+        if (result.matchedCount === 0) {
+          return res.status(404).send({ message: "Coupon not found" });
+        }
+
+        res.send({ message: "Coupon updated successfully", result });
+      } catch (error) {
+        console.error("Update coupon error:", error);
+        res.status(500).send({ message: "Internal server error" });
+      }
+    });
+
+    app.delete("/coupons/:id", async (req, res) => {
+      try {
+        const id = req.params.id;
+        const result = await couponsCollection.deleteOne({
+          _id: new ObjectId(id),
+        });
+
+        if (result.deletedCount === 0) {
+          return res.status(404).send({ message: "Coupon not found" });
+        }
+
+        res.send({ message: "Coupon deleted successfully", result });
+      } catch (error) {
+        console.error("Delete coupon error:", error);
+        res.status(500).send({ message: "Internal server error" });
+      }
+    });
+
+
+     // GET all announcements
+  app.get("/announcements", async (req, res) => {
+    try {
+      const result = await announcementCollection.find().toArray();
+      res.send(result);
+    } catch (error) {
+      res.status(500).send({ message: "Failed to fetch announcements" });
     }
+  });
 
-    const newCoupon = {
-      code,
-      discount: parseFloat(discount),
-      createdAt: new Date().toISOString(),
-    };
+  // POST new announcement
+  app.post("/announcements", async (req, res) => {
+    const newAnnouncement = req.body;
+    try {
+      const result = await announcementCollection.insertOne(newAnnouncement);
+      res.send(result);
+    } catch (error) {
+      res.status(500).send({ message: "Failed to add announcement" });
+    }
+  });
 
-    const result = await couponsCollection.insertOne(newCoupon);
-    res.send(result);
-  } catch (error) {
-    console.error("Add coupon error:", error);
-    res.status(500).send({ message: "Internal server error" });
-  }
-});
-
-app.patch("/coupons/:id", async (req, res) => {
-  try {
+  // PATCH (update) announcement
+  app.patch("/announcements/:id", async (req, res) => {
     const id = req.params.id;
-    const { code, discount } = req.body;
-
-    const updateDoc = {
-      $set: {
-        code,
-        discount: parseFloat(discount),
-        updatedAt: new Date().toISOString(),
-      },
-    };
-
-    const result = await couponsCollection.updateOne(
-      { _id: new ObjectId(id) },
-      updateDoc
-    );
-
-    if (result.matchedCount === 0) {
-      return res.status(404).send({ message: "Coupon not found" });
+    const updatedData = req.body;
+    try {
+      const result = await announcementCollection.updateOne(
+        { _id: new ObjectId(id) },
+        { $set: updatedData }
+      );
+      res.send(result);
+    } catch (error) {
+      res.status(500).send({ message: "Failed to update announcement" });
     }
+  });
 
-    res.send({ message: "Coupon updated successfully", result });
-  } catch (error) {
-    console.error("Update coupon error:", error);
-    res.status(500).send({ message: "Internal server error" });
-  }
-});
-
-
-app.delete("/coupons/:id", async (req, res) => {
-  try {
+  // DELETE announcement
+  app.delete("/announcements/:id", async (req, res) => {
     const id = req.params.id;
-    const result = await couponsCollection.deleteOne({ _id: new ObjectId(id) });
-
-    if (result.deletedCount === 0) {
-      return res.status(404).send({ message: "Coupon not found" });
+    try {
+      const result = await announcementCollection.deleteOne({
+        _id: new ObjectId(id),
+      });
+      res.send(result);
+    } catch (error) {
+      res.status(500).send({ message: "Failed to delete announcement" });
     }
+  });
 
-    res.send({ message: "Coupon deleted successfully", result });
-  } catch (error) {
-    console.error("Delete coupon error:", error);
-    res.status(500).send({ message: "Internal server error" });
-  }
-});
-
-    
   } finally {
     // Ensures that the client will close when you finish/error
     // await client.close();
