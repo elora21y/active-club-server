@@ -11,8 +11,10 @@ const port = process.env.PORT || 2200;
 app.use(cors());
 app.use(express.json());
 //firebase
-const decoded = Buffer.from(process.env.FB_SERVICE_KEY, 'base64').toString('utf-8')
-var serviceAccount = JSON.parse(decoded)
+const decoded = Buffer.from(process.env.FB_SERVICE_KEY, "base64").toString(
+  "utf-8"
+);
+var serviceAccount = JSON.parse(decoded);
 // var serviceAccount = require("./firebase-admin-key.json");
 
 admin.initializeApp({
@@ -64,8 +66,19 @@ async function run() {
       }
     };
 
+    //verify admin
+    const verifyAdmin = async (req, res, next) => {
+      const decoded = req.decoded?.email; // if using JWT-based auth
+
+      const user = await usersCollection.findOne({ decoded });
+      if (!user || user.role !== "admin") {
+        return res.status(403).send({ message: "Forbidden: Admins only" });
+      }
+      next();
+    };
+
     // === 1. GET all courts (sorted by createdAt descending) ===
-    app.get("/courts", async (req, res) => {
+    app.get("/courts", verifyToken, verifyAdmin, async (req, res) => {
       try {
         const courts = await courtsCollection
           .find({})
@@ -159,7 +172,7 @@ async function run() {
     });
 
     //users
-    app.get("/users", async (req, res) => {
+    app.get("/users", verifyToken, verifyAdmin, async (req, res) => {
       try {
         const result = await usersCollection.find().toArray();
         res.send(result);
@@ -169,7 +182,7 @@ async function run() {
       }
     });
     // GET /users/members?name=elora
-    app.get("/users/members", async (req, res) => {
+    app.get("/users/members", verifyToken, verifyAdmin, async (req, res) => {
       try {
         let query = { role: "member" };
         const members = await usersCollection.find(query).toArray();
@@ -181,17 +194,17 @@ async function run() {
     });
 
     // GET /users/role/:email
-app.get("/users/role/:email", async (req, res) => {
-  const email = req.params.email;
+    app.get( "/users/role/:email", verifyToken, async (req, res) => {
+        const email = req.params.email;
 
-  const user = await usersCollection.findOne({ email });
-  if (!user) {
-    return res.status(404).send({ role: null });
-  }
+        const user = await usersCollection.findOne({ email });
+        if (!user) {
+          return res.status(404).send({ role: null });
+        }
 
-  res.send({ role: user.role || "user" });
-});
-
+        res.send({ role: user.role || "user" });
+      }
+    );
 
     app.post("/users", async (req, res) => {
       try {
@@ -218,7 +231,7 @@ app.get("/users/role/:email", async (req, res) => {
       }
     });
     // PATCH /users/role/:email
-    app.patch("/users/role/:email", async (req, res) => {
+    app.patch("/users/role/:email", verifyToken, verifyAdmin, async (req, res) => {
       const email = req.params.email;
       const { role } = req.body; // 'admin' or 'user'
 
@@ -265,7 +278,7 @@ app.get("/users/role/:email", async (req, res) => {
       }
     });
     // === GET /bookings/approved?email=someone@example.com ===
-    app.get("/bookings/approved", async (req, res) => {
+    app.get("/bookings/approved",verifyToken, async (req, res) => {
       try {
         const email = req.query.email;
         const query = email
@@ -281,7 +294,7 @@ app.get("/users/role/:email", async (req, res) => {
     });
 
     //get confirm bookings
-    app.get("/bookings/confirm", async (req, res) => {
+    app.get("/bookings/confirm",verifyToken, async (req, res) => {
       try {
         const email = req.query.email;
         const query = email
@@ -431,7 +444,7 @@ app.get("/users/role/:email", async (req, res) => {
         res.status(500).send({ error: error.message });
       }
     });
-    app.get("/coupons", async (req, res) => {
+    app.get("/coupons",verifyToken, verifyAdmin, async (req, res) => {
       try {
         const coupons = await couponsCollection.find().toArray();
         res.send(coupons);
@@ -513,7 +526,7 @@ app.get("/users/role/:email", async (req, res) => {
     });
 
     // GET all announcements
-    app.get("/announcements", async (req, res) => {
+    app.get("/announcements",verifyToken, async (req, res) => {
       try {
         const result = await announcementCollection.find().toArray();
         res.send(result);
