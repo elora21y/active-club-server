@@ -3,12 +3,21 @@ const cors = require("cors");
 require("dotenv").config();
 const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
+var admin = require("firebase-admin");
 
 const app = express();
 const port = process.env.PORT || 2200;
 // middleware
 app.use(cors());
 app.use(express.json());
+//firebase
+const decoded = Buffer.from(process.env.FB_SERVICE_KEY, 'base64').toString('utf-8')
+var serviceAccount = JSON.parse(decoded)
+// var serviceAccount = require("./firebase-admin-key.json");
+
+admin.initializeApp({
+  credential: admin.credential.cert(serviceAccount),
+});
 
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster21.x54inhf.mongodb.net/?retryWrites=true&w=majority&appName=Cluster21`;
 
@@ -38,6 +47,22 @@ async function run() {
     const bookingsCollection = db.collection("bookings");
     const couponsCollection = db.collection("coupons");
     const announcementCollection = db.collection("announcements");
+
+    //verify token
+    const verifyToken = async (req, res, next) => {
+      const token = req.headers.authorization?.split(" ")[1];
+      // console.log(token);
+      if (!token) return res.status(401).send("Unauthorized");
+
+      try {
+        // verify
+        const decoded = await admin.auth().verifyIdToken(token);
+        req.decoded = decoded;
+        next();
+      } catch (error) {
+        return res.status(403).send({ message: "Invalid token" });
+      }
+    };
 
     // === 1. GET all courts (sorted by createdAt descending) ===
     app.get("/courts", async (req, res) => {
@@ -155,17 +180,34 @@ async function run() {
       }
     });
 
+    // GET /users/role/:email
+app.get("/users/role/:email", async (req, res) => {
+  const email = req.params.email;
+
+  const user = await usersCollection.findOne({ email });
+  if (!user) {
+    return res.status(404).send({ role: null });
+  }
+
+  res.send({ role: user.role || "user" });
+});
+
+
     app.post("/users", async (req, res) => {
       try {
         const userInfo = req.body;
-
+        // console.log(userInfo)
         const exitUser = await usersCollection.findOne({
           email: userInfo.email,
         });
         if (exitUser) {
-          return res
-            .status(400)
-            .send({ message: "This Email is already Register" });
+          // update user last login
+          const lastLogin = userInfo.last_login;
+          await usersCollection.updateOne(
+            { email: userInfo.email },
+            { $set: { last_login: lastLogin } }
+          );
+          return res.send(lastLogin);
         }
 
         const result = await usersCollection.insertOne(userInfo);
@@ -174,6 +216,18 @@ async function run() {
         console.error("User creation error:", error);
         res.status(500).send({ message: "Internal server error", error });
       }
+    });
+    // PATCH /users/role/:email
+    app.patch("/users/role/:email", async (req, res) => {
+      const email = req.params.email;
+      const { role } = req.body; // 'admin' or 'user'
+
+      const result = await usersCollection.updateOne(
+        { email },
+        { $set: { role } }
+      );
+
+      res.send(result);
     });
 
     // DELETE /users/:id
@@ -192,7 +246,7 @@ async function run() {
     });
 
     // === GET bookings (filtered by email + pending) ===
-    app.get("/bookings", async (req, res) => {
+    app.get("/bookings", verifyToken, async (req, res) => {
       try {
         const email = req.query.email;
         let query = {};
@@ -243,7 +297,7 @@ async function run() {
     });
 
     //get all bookings with id
-    app.get("/bookings/:id", async (req, res) => {
+    app.get("/bookings/:id", verifyToken, async (req, res) => {
       const id = req.params.id;
       const bookings = await bookingsCollection.findOne({
         _id: new ObjectId(id),
@@ -320,7 +374,7 @@ async function run() {
     });
 
     // get for payments
-    app.get("/payments", async (req, res) => {
+    app.get("/payments", verifyToken, async (req, res) => {
       try {
         const email = req.query.email;
 
@@ -458,56 +512,54 @@ async function run() {
       }
     });
 
+    // GET all announcements
+    app.get("/announcements", async (req, res) => {
+      try {
+        const result = await announcementCollection.find().toArray();
+        res.send(result);
+      } catch (error) {
+        res.status(500).send({ message: "Failed to fetch announcements" });
+      }
+    });
 
-     // GET all announcements
-  app.get("/announcements", async (req, res) => {
-    try {
-      const result = await announcementCollection.find().toArray();
-      res.send(result);
-    } catch (error) {
-      res.status(500).send({ message: "Failed to fetch announcements" });
-    }
-  });
+    // POST new announcement
+    app.post("/announcements", async (req, res) => {
+      const newAnnouncement = req.body;
+      try {
+        const result = await announcementCollection.insertOne(newAnnouncement);
+        res.send(result);
+      } catch (error) {
+        res.status(500).send({ message: "Failed to add announcement" });
+      }
+    });
 
-  // POST new announcement
-  app.post("/announcements", async (req, res) => {
-    const newAnnouncement = req.body;
-    try {
-      const result = await announcementCollection.insertOne(newAnnouncement);
-      res.send(result);
-    } catch (error) {
-      res.status(500).send({ message: "Failed to add announcement" });
-    }
-  });
+    // PATCH (update) announcement
+    app.patch("/announcements/:id", async (req, res) => {
+      const id = req.params.id;
+      const updatedData = req.body;
+      try {
+        const result = await announcementCollection.updateOne(
+          { _id: new ObjectId(id) },
+          { $set: updatedData }
+        );
+        res.send(result);
+      } catch (error) {
+        res.status(500).send({ message: "Failed to update announcement" });
+      }
+    });
 
-  // PATCH (update) announcement
-  app.patch("/announcements/:id", async (req, res) => {
-    const id = req.params.id;
-    const updatedData = req.body;
-    try {
-      const result = await announcementCollection.updateOne(
-        { _id: new ObjectId(id) },
-        { $set: updatedData }
-      );
-      res.send(result);
-    } catch (error) {
-      res.status(500).send({ message: "Failed to update announcement" });
-    }
-  });
-
-  // DELETE announcement
-  app.delete("/announcements/:id", async (req, res) => {
-    const id = req.params.id;
-    try {
-      const result = await announcementCollection.deleteOne({
-        _id: new ObjectId(id),
-      });
-      res.send(result);
-    } catch (error) {
-      res.status(500).send({ message: "Failed to delete announcement" });
-    }
-  });
-
+    // DELETE announcement
+    app.delete("/announcements/:id", async (req, res) => {
+      const id = req.params.id;
+      try {
+        const result = await announcementCollection.deleteOne({
+          _id: new ObjectId(id),
+        });
+        res.send(result);
+      } catch (error) {
+        res.status(500).send({ message: "Failed to delete announcement" });
+      }
+    });
   } finally {
     // Ensures that the client will close when you finish/error
     // await client.close();
