@@ -35,12 +35,12 @@ const client = new MongoClient(uri, {
 async function run() {
   try {
     // Connect the client to the server	(optional starting in v4.7)
-    await client.connect();
+    // await client.connect();
     // Send a ping to confirm a successful connection
-    await client.db("admin").command({ ping: 1 });
-    console.log(
-      "Pinged your deployment. You successfully connected to MongoDB!"
-    );
+    // await client.db("admin").command({ ping: 1 });
+    // console.log(
+    //   "Pinged your deployment. You successfully connected to MongoDB!"
+    // );
 
     const db = client.db("activeClub");
     const courtsCollection = db.collection("courts");
@@ -68,17 +68,20 @@ async function run() {
 
     //verify admin
     const verifyAdmin = async (req, res, next) => {
-      const decoded = req.decoded?.email; // if using JWT-based auth
+  const email = req.decoded?.email; 
 
-      const user = await usersCollection.findOne({ decoded });
-      if (!user || user.role !== "admin") {
-        return res.status(403).send({ message: "Forbidden: Admins only" });
-      }
-      next();
-    };
+  if (!email) return res.status(401).send({ message: "Unauthorized: No email in token" });
+
+  const user = await usersCollection.findOne({ email }); 
+  if (!user || user.role !== "admin") {
+    return res.status(403).send({ message: "Forbidden: Admins only" });
+  }
+
+  next(); // user is verified as admin
+};
 
     // === 1. GET all courts (sorted by createdAt descending) ===
-    app.get("/courts", verifyToken, verifyAdmin, async (req, res) => {
+    app.get("/courts", async (req, res) => {
       try {
         const courts = await courtsCollection
           .find({})
@@ -110,7 +113,7 @@ async function run() {
     // });
 
     // ===3. COURT POST API ===
-    app.post("/courts", async (req, res) => {
+    app.post("/courts",verifyToken, verifyAdmin, async (req, res) => {
       try {
         const courtData = req.body;
         // courtData.createdAt = new Date().toISOString();
@@ -146,7 +149,7 @@ async function run() {
     });
 
     // === 5. UPDATE court by ID ===
-    app.put("/courts/:id", async (req, res) => {
+    app.put("/courts/:id",verifyToken, verifyAdmin,  async (req, res) => {
       try {
         const id = req.params.id;
         const updatedData = req.body;
