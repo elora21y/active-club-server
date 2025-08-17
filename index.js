@@ -68,17 +68,50 @@ async function run() {
 
     //verify admin
     const verifyAdmin = async (req, res, next) => {
-  const email = req.decoded?.email; 
+      const email = req.decoded?.email;
 
-  if (!email) return res.status(401).send({ message: "Unauthorized: No email in token" });
+      if (!email)
+        return res
+          .status(401)
+          .send({ message: "Unauthorized: No email in token" });
 
-  const user = await usersCollection.findOne({ email }); 
-  if (!user || user.role !== "admin") {
-    return res.status(403).send({ message: "Forbidden: Admins only" });
-  }
+      const user = await usersCollection.findOne({ email });
+      if (!user || user.role !== "admin") {
+        return res.status(403).send({ message: "Forbidden: Admins only" });
+      }
 
-  next(); // user is verified as admin
-};
+      next(); // user is verified as admin
+    };
+    // === Admin Stats Route ===
+    app.get("/admin/stats", async (req, res) => {
+      try {
+        const users = await usersCollection.find().toArray();
+        const courts = await courtsCollection.find().toArray();
+        const bookings = await bookingsCollection.find().toArray();
+        const announcements = await announcementCollection.find().toArray();
+        const payments = await paymentsCollection.find().toArray();
+
+        const totalUsers = users.length;
+        const totalCourts = courts.length;
+        const totalBookings = bookings.length;
+        const totalAnnouncements = announcements.length;
+        const totalPayments = payments.length;
+        const totalMembers = users.filter(
+          (user) => user.role === "member"
+        ).length;
+
+        res.send({
+          totalUsers,
+          totalCourts,
+          totalMembers,
+          totalBookings,
+          totalAnnouncements,
+          totalPayments
+        });
+      } catch (err) {
+        res.status(500).send({ message: "Failed to fetch stats", error: err });
+      }
+    });
 
     // === 1. GET all courts (sorted by createdAt descending) ===
     app.get("/courts", async (req, res) => {
@@ -113,7 +146,7 @@ async function run() {
     // });
 
     // ===3. COURT POST API ===
-    app.post("/courts",verifyToken, verifyAdmin, async (req, res) => {
+    app.post("/courts", verifyToken, verifyAdmin, async (req, res) => {
       try {
         const courtData = req.body;
         // courtData.createdAt = new Date().toISOString();
@@ -149,7 +182,7 @@ async function run() {
     });
 
     // === 5. UPDATE court by ID ===
-    app.put("/courts/:id",verifyToken, verifyAdmin,  async (req, res) => {
+    app.put("/courts/:id", verifyToken, verifyAdmin, async (req, res) => {
       try {
         const id = req.params.id;
         const updatedData = req.body;
@@ -197,17 +230,16 @@ async function run() {
     });
 
     // GET /users/role/:email
-    app.get( "/users/role/:email", verifyToken, async (req, res) => {
-        const email = req.params.email;
+    app.get("/users/role/:email", verifyToken, async (req, res) => {
+      const email = req.params.email;
 
-        const user = await usersCollection.findOne({ email });
-        if (!user) {
-          return res.status(404).send({ role: null });
-        }
-
-        res.send({ role: user.role || "user" });
+      const user = await usersCollection.findOne({ email });
+      if (!user) {
+        return res.status(404).send({ role: null });
       }
-    );
+
+      res.send({ role: user.role || "user" });
+    });
 
     app.post("/users", async (req, res) => {
       try {
@@ -234,17 +266,22 @@ async function run() {
       }
     });
     // PATCH /users/role/:email
-    app.patch("/users/role/:email", verifyToken, verifyAdmin, async (req, res) => {
-      const email = req.params.email;
-      const { role } = req.body; // 'admin' or 'user'
+    app.patch(
+      "/users/role/:email",
+      verifyToken,
+      verifyAdmin,
+      async (req, res) => {
+        const email = req.params.email;
+        const { role } = req.body; // 'admin' or 'user'
 
-      const result = await usersCollection.updateOne(
-        { email },
-        { $set: { role } }
-      );
+        const result = await usersCollection.updateOne(
+          { email },
+          { $set: { role } }
+        );
 
-      res.send(result);
-    });
+        res.send(result);
+      }
+    );
 
     // DELETE /users/:id
     app.delete("/users/:id", async (req, res) => {
@@ -281,7 +318,7 @@ async function run() {
       }
     });
     // === GET /bookings/approved?email=someone@example.com ===
-    app.get("/bookings/approved",verifyToken, async (req, res) => {
+    app.get("/bookings/approved", verifyToken, async (req, res) => {
       try {
         const email = req.query.email;
         const query = email
@@ -297,7 +334,7 @@ async function run() {
     });
 
     //get confirm bookings
-    app.get("/bookings/confirm",verifyToken, async (req, res) => {
+    app.get("/bookings/confirm", verifyToken, async (req, res) => {
       try {
         const email = req.query.email;
         const query = email
@@ -447,7 +484,7 @@ async function run() {
         res.status(500).send({ error: error.message });
       }
     });
-    app.get("/coupons",verifyToken, verifyAdmin, async (req, res) => {
+    app.get("/coupons", verifyToken, verifyAdmin, async (req, res) => {
       try {
         const coupons = await couponsCollection.find().toArray();
         res.send(coupons);
@@ -529,7 +566,7 @@ async function run() {
     });
 
     // GET all announcements
-    app.get("/announcements",verifyToken, async (req, res) => {
+    app.get("/announcements", verifyToken, async (req, res) => {
       try {
         const result = await announcementCollection.find().toArray();
         res.send(result);
