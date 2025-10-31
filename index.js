@@ -35,12 +35,12 @@ const client = new MongoClient(uri, {
 async function run() {
   try {
     // Connect the client to the server	(optional starting in v4.7)
-    // await client.connect();
+    await client.connect();
     // Send a ping to confirm a successful connection
-    // await client.db("admin").command({ ping: 1 });
-    // console.log(
-    //   "Pinged your deployment. You successfully connected to MongoDB!"
-    // );
+    await client.db("admin").command({ ping: 1 });
+    console.log(
+      "Pinged your deployment. You successfully connected to MongoDB!"
+    );
 
     const db = client.db("activeClub");
     const courtsCollection = db.collection("courts");
@@ -49,6 +49,7 @@ async function run() {
     const bookingsCollection = db.collection("bookings");
     const couponsCollection = db.collection("coupons");
     const announcementCollection = db.collection("announcements");
+    const subscribeCollection = db.collection("subscribe");
 
     //verify token
     const verifyToken = async (req, res, next) => {
@@ -611,6 +612,25 @@ async function run() {
         res.send(result);
       } catch (error) {
         res.status(500).send({ message: "Failed to delete announcement" });
+      }
+    });
+
+    //post subscribe 
+     // POST new announcement
+    app.post("/subscribe", async (req, res) => {
+      const subscribe = req.body;
+      const alreadySubscribed = await subscribeCollection.findOne({subscriber_email : subscribe.subscriber_email})
+      // console.log(alreadySubscribed )
+      try {
+        if(alreadySubscribed.subscriber_email === subscribe.subscriber_email){
+          res.send({message: 'You are already subscribed. Thank you!'})
+          return
+        }
+          const result = await subscribeCollection.insertOne(subscribe);
+        res.send({message : 'Thank You for subscribing!'});
+        
+      } catch (error) {
+        res.status(500).send({ message: "Failed to add announcement" });
       }
     });
   } finally {
